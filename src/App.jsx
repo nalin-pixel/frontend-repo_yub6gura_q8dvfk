@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import Hero from './components/Hero'
 import Problem from './components/Problem'
 import Solution from './components/Solution'
@@ -8,8 +8,28 @@ import SocialProof from './components/SocialProof'
 import Pricing from './components/Pricing'
 import CTA from './components/CTA'
 import Footer from './components/Footer'
+import AuthModal from './components/AuthModal'
 
 function App() {
+  const [authOpen, setAuthOpen] = useState(false)
+  const [user, setUser] = useState(null)
+
+  useEffect(() => {
+    const token = localStorage.getItem('inboxforge_token')
+    const API_BASE = import.meta.env.VITE_BACKEND_URL || ''
+    if (token) {
+      fetch(`${API_BASE}/auth/me`, { headers: { Authorization: `Bearer ${token}` } })
+        .then(r => r.ok ? r.json() : null)
+        .then(me => me && setUser(me))
+        .catch(() => {})
+    }
+  }, [])
+
+  const logout = () => {
+    localStorage.removeItem('inboxforge_token')
+    setUser(null)
+  }
+
   return (
     <div className="min-h-screen w-full bg-black text-white">
       {/* Top nav */}
@@ -20,10 +40,19 @@ function App() {
             <span className="text-sm font-semibold tracking-wide">InboxForge</span>
           </div>
           <nav className="hidden items-center gap-6 text-sm text-blue-300/90 sm:flex">
-            <a href="#" className="hover:text-white">Features</a>
+            <a href="#features" className="hover:text-white">Features</a>
             <a href="#pricing" className="hover:text-white">Pricing</a>
-            <a href="#" className="hover:text-white">Login</a>
-            <a href="#" className="rounded-xl bg-blue-600 px-3 py-1.5 font-semibold text-white shadow-[0_0_20px_rgba(59,130,246,0.8)] hover:scale-[1.02]">Start Free</a>
+            {user ? (
+              <div className="flex items-center gap-2">
+                <span className="text-white/80">Hi, {user.name || user.email}</span>
+                <button onClick={logout} className="rounded-xl bg-white/10 px-3 py-1.5 font-semibold text-white hover:bg-white/20">Logout</button>
+              </div>
+            ) : (
+              <>
+                <button onClick={() => setAuthOpen(true)} className="hover:text-white">Login</button>
+                <button onClick={() => setAuthOpen(true)} className="rounded-xl bg-blue-600 px-3 py-1.5 font-semibold text-white shadow-[0_0_20px_rgba(59,130,246,0.8)] hover:scale-[1.02]">Start Free</button>
+              </>
+            )}
           </nav>
         </div>
       </header>
@@ -40,6 +69,12 @@ function App() {
       </main>
 
       <Footer />
+
+      <AuthModal
+        open={authOpen}
+        onClose={() => setAuthOpen(false)}
+        onAuthed={({ user }) => setUser(user)}
+      />
     </div>
   )
 }
