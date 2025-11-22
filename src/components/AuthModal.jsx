@@ -1,8 +1,24 @@
 import React, { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Mail, Lock, User2, CheckCircle2, LogOut } from 'lucide-react'
+import { X, Mail, Lock, User2, CheckCircle2 } from 'lucide-react'
 
 const API_BASE = import.meta.env.VITE_BACKEND_URL || ''
+
+function parseError(detail) {
+  if (!detail) return 'Something went wrong'
+  if (typeof detail === 'string') return detail
+  if (Array.isArray(detail)) {
+    // FastAPI validation errors
+    const first = detail[0]
+    if (first?.msg) return first.msg
+    try { return JSON.stringify(detail) } catch { return 'Unexpected error' }
+  }
+  if (typeof detail === 'object') {
+    if (detail.msg) return detail.msg
+    try { return JSON.stringify(detail) } catch { return 'Unexpected error' }
+  }
+  return 'Something went wrong'
+}
 
 export default function AuthModal({ open, onClose, onAuthed }) {
   const [mode, setMode] = useState('login') // 'login' | 'register'
@@ -34,8 +50,8 @@ export default function AuthModal({ open, onClose, onAuthed }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
       })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data?.detail || 'Something went wrong')
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(parseError(data?.detail))
       const token = data.access_token
       localStorage.setItem('inboxforge_token', token)
       setSuccess(mode === 'login' ? 'Welcome back!' : 'Account created!')
@@ -49,7 +65,7 @@ export default function AuthModal({ open, onClose, onAuthed }) {
         onClose?.()
       }, 600)
     } catch (err) {
-      setError(err.message)
+      setError(err.message || 'Something went wrong')
     } finally {
       setLoading(false)
     }

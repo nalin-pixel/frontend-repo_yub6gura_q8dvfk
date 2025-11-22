@@ -1,7 +1,8 @@
-import React, { useState } from 'react'
-import { User, Users, Shield, Bell, Lock, Globe2, Clock3, Mail, KeyRound, Building2, Plus, X, Edit3, Trash2, Wand2, MessageSquareQuote, ToggleLeft, PlugZap, Instagram, MessageCircle, Facebook, Store, CreditCard, Receipt, ChevronDown, Sliders, AlertTriangle, Moon, Languages, CalendarClock, Inbox } from 'lucide-react'
+import React, { useEffect, useState } from 'react'
+import { User, Building2, X, Wand2, PlugZap, Instagram, MessageCircle, Facebook, Store, CreditCard, ChevronDown, Sliders, AlertTriangle } from 'lucide-react'
 
 const BLUE = '#006BFF'
+const API_BASE = import.meta.env.VITE_BACKEND_URL || ''
 
 function SectionHeader({ icon: Icon, title, subtitle }) {
   return (
@@ -66,9 +67,13 @@ function Textarea({ value, onChange, rows=3, placeholder }) {
 }
 
 export default function SettingsPage() {
-  // Local demo state
-  const [name, setName] = useState('Alex Rivera')
-  const [email, setEmail] = useState('alex@inboxforge.com')
+  // State
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
   const [tz, setTz] = useState('UTC')
   const [notifNew, setNotifNew] = useState(true)
   const [notifVip, setNotifVip] = useState(true)
@@ -77,20 +82,16 @@ export default function SettingsPage() {
 
   const [wsName, setWsName] = useState('Default Workspace')
   const [inviteEmail, setInviteEmail] = useState('')
-  const [members, setMembers] = useState([
-    { id: 1, name: 'You', email: email, role: 'Owner' },
-    { id: 2, name: 'Sam Lee', email: 'sam@example.com', role: 'Admin' },
-    { id: 3, name: 'Jordan Kim', email: 'jordan@example.com', role: 'Editor' },
-  ])
+  const [members, setMembers] = useState([])
 
-  const [tone, setTone] = useState(50) // 0 Friendly, 50 Balanced, 100 Professional
-  const [brandVoice, setBrandVoice] = useState('Friendly, concise, helpful. Avoid jargon.')
-  const [exampleReplies, setExampleReplies] = useState('Thanks for reaching out! Here’s a quick answer...')
-  const [avoidWords, setAvoidWords] = useState('guarantee, promise, 100%')
+  const [tone, setTone] = useState(50)
+  const [brandVoice, setBrandVoice] = useState('')
+  const [exampleReplies, setExampleReplies] = useState('')
+  const [avoidWords, setAvoidWords] = useState('')
   const [aiAutoReply, setAiAutoReply] = useState(true)
   const [maxReplyLen, setMaxReplyLen] = useState(280)
   const [profanity, setProfanity] = useState(true)
-  const [keywords, setKeywords] = useState(['DEMO', 'GUIDE', 'PRICING'])
+  const [keywords, setKeywords] = useState([])
 
   const [integrations, setIntegrations] = useState([
     { name: 'Instagram', key: 'instagram', connected: true },
@@ -115,9 +116,48 @@ export default function SettingsPage() {
     Shopify: Store,
   }
 
+  useEffect(() => {
+    const token = localStorage.getItem('inboxforge_token')
+    if (!token) { setLoading(false); return }
+    fetch(`${API_BASE}/settings`, { headers: { Authorization: `Bearer ${token}` }})
+      .then(async (r) => {
+        if (!r.ok) throw new Error('Failed to load settings')
+        return r.json()
+      })
+      .then((s) => {
+        setName(s.name || '')
+        setEmail(s.email || '')
+        setTz(s.tz || 'UTC')
+        setNotifNew(!!s.notifNew)
+        setNotifVip(!!s.notifVip)
+        setNotifAi(!!s.notifAi)
+        setTwoFA(!!s.twoFA)
+        setWsName(s.wsName || 'Default Workspace')
+        setMembers(Array.isArray(s.members) ? s.members : [])
+        setTone(typeof s.tone === 'number' ? s.tone : 50)
+        setBrandVoice(s.brandVoice || '')
+        setExampleReplies(s.exampleReplies || '')
+        setAvoidWords(s.avoidWords || '')
+        setAiAutoReply(!!s.aiAutoReply)
+        setMaxReplyLen(typeof s.maxReplyLen === 'number' ? s.maxReplyLen : 280)
+        setProfanity(!!s.profanity)
+        setKeywords(Array.isArray(s.keywords) ? s.keywords : [])
+        setIntegrations(Array.isArray(s.integrations) ? s.integrations : [])
+        setPlan(s.plan || 'Pro')
+        setCycle(s.cycle || 'Monthly')
+        setPaymentMethod(s.paymentMethod || 'Visa •••• 4242')
+        setDarkMode(!!s.darkMode)
+        setLanguage(s.language || 'English')
+        setDtFormat(s.dtFormat || 'YYYY-MM-DD, 24h')
+        setDefaultView(s.defaultView || 'Unified Inbox')
+      })
+      .catch(() => setError('Could not load settings'))
+      .finally(() => setLoading(false))
+  }, [])
+
   const handleInvite = () => {
     if (!inviteEmail) return
-    setMembers([...members, { id: Date.now(), name: inviteEmail.split('@')[0], email: inviteEmail, role: 'Editor' }])
+    setMembers([...members, { id: String(Date.now()), name: inviteEmail.split('@')[0], email: inviteEmail, role: 'Editor' }])
     setInviteEmail('')
   }
 
@@ -131,6 +171,38 @@ export default function SettingsPage() {
   }
   const removeKeyword = (k) => setKeywords(keywords.filter(x => x !== k))
 
+  const saveAll = async () => {
+    setSaving(true)
+    setError('')
+    try {
+      const token = localStorage.getItem('inboxforge_token')
+      const payload = {
+        name, email, tz, notifNew, notifVip, notifAi, twoFA,
+        wsName, members,
+        tone, brandVoice, exampleReplies, avoidWords, aiAutoReply, maxReplyLen, profanity, keywords,
+        integrations,
+        plan, cycle, paymentMethod,
+        darkMode, language, dtFormat, defaultView,
+      }
+      const res = await fetch(`${API_BASE}/settings`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(payload)
+      })
+      if (!res.ok) throw new Error('Failed to save settings')
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-black text-white">Loading…</div>
+    )
+  }
+
   return (
     <div className="min-h-screen w-full bg-black text-white">
       {/* Top bar */}
@@ -143,11 +215,15 @@ export default function SettingsPage() {
           <nav className="flex items-center gap-3 text-sm text-white/70">
             <a href="/dashboard" className="hover:text-white">Dashboard</a>
             <a className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-white hover:bg-white/10" href="/">Home</a>
+            <button onClick={saveAll} className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:brightness-110 disabled:opacity-60" disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
           </nav>
         </div>
       </header>
 
       <main className="mx-auto max-w-6xl space-y-4 px-4 py-6">
+        {error && (
+          <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">{error}</div>
+        )}
         {/* 1. Account Settings */}
         <Card>
           <SectionHeader icon={User} title="Account Settings" subtitle="Manage your personal information and security" />
@@ -216,23 +292,13 @@ export default function SettingsPage() {
                 </div>
                 <div className="col-span-4 text-white/70">{m.email}</div>
                 <div className="col-span-3">
-                  <Select value={m.role} onChange={(v)=>changeRole(m.id, v)} options={[ 'Owner', 'Admin', 'Editor' ]} />
+                  <Select value={m.role} onChange={(v)=>setMembers(members.map(x=>x.id===m.id?{...x, role:v}:x))} options={[ 'Owner', 'Admin', 'Editor' ]} />
                 </div>
                 <div className="col-span-1 text-right">
-                  <button onClick={()=>removeMember(m.id)} className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-xs text-white/70 hover:bg-white/10">Remove</button>
+                  <button onClick={()=>setMembers(members.filter(x=>x.id!==m.id))} className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-xs text-white/70 hover:bg-white/10">Remove</button>
                 </div>
               </div>
             ))}
-          </div>
-          <div className="mt-3">
-            <div className="mb-1 text-xs text-white/60">Permissions editor</div>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              {['Manage Billing','Connect Accounts','Edit Brand Voice','Manage Funnels','View Analytics','Manage Members','Export Data','Dangerous Actions'].map((p)=> (
-                <label key={p} className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/80">
-                  <input type="checkbox" className="h-4 w-4 accent-blue-600" defaultChecked /> {p}
-                </label>
-              ))}
-            </div>
           </div>
         </Card>
 
@@ -278,16 +344,17 @@ export default function SettingsPage() {
               {keywords.map(k => (
                 <span key={k} className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-1 text-xs text-white/80">
                   {k}
-                  <button onClick={()=>removeKeyword(k)} className="text-white/50 hover:text-white"><X size={12} /></button>
+                  <button onClick={()=>setKeywords(keywords.filter(x=>x!==k))} className="text-white/50 hover:text-white"><X size={12} /></button>
                 </span>
               ))}
             </div>
             <div className="mt-2 flex gap-2">
               <Input value="" onChange={()=>{}} placeholder="Type a keyword and press Add" />
-              {/* Simple add with prompt to keep UI minimal */}
               <button onClick={() => {
                 const k = window.prompt('Add keyword:')
-                if (k) addKeyword(k)
+                if (k) {
+                  const val = k.toUpperCase(); if (!keywords.includes(val)) setKeywords([...keywords, val])
+                }
               }} className="rounded-lg bg-[var(--blue)] px-3 py-2 text-sm font-semibold text-white hover:brightness-110" style={{ ['--blue']: BLUE }}>Add</button>
             </div>
           </div>
