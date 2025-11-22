@@ -9,10 +9,12 @@ import Pricing from './components/Pricing'
 import CTA from './components/CTA'
 import Footer from './components/Footer'
 import AuthModal from './components/AuthModal'
+import { useNavigate } from 'react-router-dom'
 
 function App() {
   const [authOpen, setAuthOpen] = useState(false)
   const [user, setUser] = useState(null)
+  const navigate = useNavigate()
 
   useEffect(() => {
     const token = localStorage.getItem('inboxforge_token')
@@ -30,6 +32,10 @@ function App() {
     setUser(null)
   }
 
+  const goDashboard = () => {
+    navigate('/dashboard')
+  }
+
   return (
     <div className="min-h-screen w-full bg-black text-white">
       {/* Top nav */}
@@ -44,6 +50,7 @@ function App() {
             <a href="#pricing" className="hover:text-white">Pricing</a>
             {user ? (
               <div className="flex items-center gap-2">
+                <button onClick={goDashboard} className="rounded-xl bg-white/10 px-3 py-1.5 font-semibold text-white hover:bg-white/20">Open Dashboard</button>
                 <span className="text-white/80">Hi, {user.name || user.email}</span>
                 <button onClick={logout} className="rounded-xl bg-white/10 px-3 py-1.5 font-semibold text-white hover:bg-white/20">Logout</button>
               </div>
@@ -73,7 +80,7 @@ function App() {
       <AuthModal
         open={authOpen}
         onClose={() => setAuthOpen(false)}
-        onAuthed={({ user }) => setUser(user)}
+        onAuthed={({ user }) => { setUser(user); navigate('/dashboard') }}
       />
     </div>
   )
